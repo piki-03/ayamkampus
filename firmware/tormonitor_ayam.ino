@@ -49,7 +49,7 @@ const int RELAY[RELAY_COUNT] = { 17, 5, 18, 19, 14, 27, 26, 25 };
 #define DHT_RETRY_DELAY 600
 
 // ── Suhu threshold relay5 ─────────────────────────────────────
-#define RELAY5_IDX      9      
+#define RELAY5_IDX      3     
 #define SUHU_THRESHOLD  28.0f   
 
 // ═══════════════════════════════════════════════════════════════
