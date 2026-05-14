@@ -10,17 +10,17 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const CONFIG = {
   suhu: { min_optimal: 24, max_optimal: 30 },
   kelembapan: { max_ideal: 75 },
-  pakan: { jarak_kosong: 30.0, jarak_penuh: 5.0, kritis: 15 },
+  pakan: { kritis: 15 },
 };
 
 async function supabaseFetch(path, method, body = null) {
   return fetch(`${SUPABASE_URL}${path}`, {
     method,
     headers: {
-      "Content-Type":  "application/json",
-      "apikey":        SUPABASE_KEY,
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
       "Authorization": `Bearer ${SUPABASE_KEY}`,
-      "Prefer":        "return=minimal",
+      "Prefer": "return=minimal",
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -37,35 +37,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { suhu, kelembapan, jarak_cm } = req.body;
+  // ── Ambil dari body ──────────────────────────────────────────
+  const { suhu, kelembapan, stok_pakan } = req.body;
 
-  if (suhu === undefined || kelembapan === undefined || jarak_cm === undefined) {
-    return res.status(400).json({ error: "Field suhu, kelembapan, jarak_cm wajib diisi" });
+  if (suhu === undefined || kelembapan === undefined || stok_pakan === undefined) {
+    return res.status(400).json({ error: "Field suhu, kelembapan, stok_pakan wajib diisi" });
   }
 
-  // Kalkulasi stok pakan dari jarak ultrasonik
-  const { jarak_kosong, jarak_penuh } = CONFIG.pakan;
-  let stok_pakan = ((jarak_kosong - jarak_cm) / (jarak_kosong - jarak_penuh)) * 100;
-  stok_pakan = Math.min(100, Math.max(0, Math.round(stok_pakan * 100) / 100));
-
-  // Status suhu
+  // ── Status suhu ──────────────────────────────────────────────
   let status_suhu;
-  if (suhu < CONFIG.suhu.min_optimal)      status_suhu = "rendah";
+  if (suhu < CONFIG.suhu.min_optimal) status_suhu = "rendah";
   else if (suhu <= CONFIG.suhu.max_optimal) status_suhu = "optimal";
-  else                                       status_suhu = "panas";
+  else status_suhu = "panas";
 
-  // Status kelembapan & pakan
+  // ── Status kelembapan & pakan ────────────────────────────────
   const status_kelembapan = kelembapan <= CONFIG.kelembapan.max_ideal ? "ideal" : "lembap";
-  const status_pakan      = stok_pakan <= CONFIG.pakan.kritis ? "kritis" : "tersedia";
+  const status_pakan = stok_pakan <= CONFIG.pakan.kritis ? "kritis" : "tersedia";
 
+  // ── Payload ke Supabase ──────────────────────────────────────
   const payload = {
-    suhu:              Math.round(suhu * 100) / 100,
-    kelembapan:        Math.round(kelembapan * 100) / 100,
-    jarak_cm:          Math.round(jarak_cm * 100) / 100,
-    stok_pakan,
-    status_suhu,
-    status_kelembapan,
-    status_pakan,
+    suhu: Math.round(suhu * 100) / 100,
+    kelembapan: Math.round(kelembapan * 100) / 100,
+    stok_pakan: Math.round(stok_pakan * 100) / 100,
   };
 
   const sbRes = await supabaseFetch("/rest/v1/tormonitor_ayam_logs", "POST", payload);
