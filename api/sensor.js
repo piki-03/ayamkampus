@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   }
 
 // Konversi jarak → persen (wadah 5cm)
-const stok_pakan = jarak_cm >= 5 ? 0 : Math.round((1 - jarak_cm / 5) * 100 * 10) / 10;
+const stok_pakan = stok_pakan  >= 5 ? 0 : Math.round((1 - stok_pakan  / 5) * 100 * 10) / 10;
 
   // ── Status suhu ──────────────────────────────────────────────
   let status_suhu;
