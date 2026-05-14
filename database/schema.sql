@@ -1,136 +1,311 @@
--- ============================================================
--- TORMONITOR AYAM — Database Schema
--- Platform: Supabase (PostgreSQL)
--- ============================================================
+/*
+ * TORMONITOR AYAM — ESP32 Firmware
+ * Backend: Vercel Serverless Functions
+ *
+ * Virtual Pin mapping:
+ * V1  = suhu (DHT22, GPIO4)
+ * V2  = kelembapan (DHT22, GPIO4)
+ * V3  = jarak_cm (Ultrasonik HC-SR04, GPIO14)
+ * V10–V17 = relay GPIO 17,5,18,19,21,3,1,22
+ *
+ * Library yang dibutuhkan:
+ * - DHT sensor library (Adafruit)
+ * - Adafruit Unified Sensor
+ * - ArduinoJson (Benoit Blanchon) v6+
+ */
 
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <ArduinoJson.h>
+#include <DHT.h>
 
--- ============================================================
--- 1. TABEL LOGS SENSOR
---    Menyimpan data dari sensor IoT (suhu, kelembapan, pakan)
--- ============================================================
+// ═══════════════════════════════════════════════════════════════
+// KONFIGURASI — WAJIB DIISI
+// ═══════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS tormonitor_ayam_logs (
-    id          BIGSERIAL PRIMARY KEY,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    suhu        NUMERIC(5, 2) NOT NULL,       -- Suhu kandang dalam °C (0–50)
-    kelembapan  NUMERIC(5, 2) NOT NULL,       -- Kelembapan dalam % (0–100)
-    stok_pakan  NUMERIC(5, 2) NOT NULL        -- Stok pakan dalam % (0–100)
-);
+const char* WIFI_SSID = "telurdadar";
+const char* WIFI_PASS = "telurdadar";
 
--- Indeks untuk query terbaru (dipakai di .order('created_at', desc).limit(1))
-CREATE INDEX IF NOT EXISTS idx_logs_created_at
-    ON tormonitor_ayam_logs (created_at DESC);
+// Ganti dengan URL Vercel kamu setelah deploy
+// Contoh: "https://tormonitor-ayam.vercel.app"
+const char* API_BASE = "https://ayamkampus-9nnq.vercel.app";
 
--- Komentar kolom
-COMMENT ON TABLE  tormonitor_ayam_logs             IS 'Log data sensor IoT kandang ayam';
-COMMENT ON COLUMN tormonitor_ayam_logs.suhu        IS 'Suhu kandang dalam derajat Celsius';
-COMMENT ON COLUMN tormonitor_ayam_logs.kelembapan  IS 'Kelembapan relatif kandang dalam persen';
-COMMENT ON COLUMN tormonitor_ayam_logs.stok_pakan  IS 'Level stok pakan dari sensor ultrasonik dalam persen';
+// ── Pin Hardware ──────────────────────────────────────────────
+#define DHT_PIN 4  // DHT22 data pin
+#define DHT_TYPE DHT22
+#define ULTRA_PIN 14  // HC-SR04 single-pin
 
+// ── Relay 8 channel (active LOW) ─────────────────────────────
+#define RELAY_COUNT 8
+const int RELAY[RELAY_COUNT] = { 17, 5, 18, 19, 21, 23, 25, 22 };
 
--- ============================================================
--- 2. TABEL CONTROLS PERANGKAT
---    Menyimpan status on/off setiap perangkat
--- ============================================================
+// ── Interval polling ─────────────────────────────────────────
+#define INTERVAL_SENSOR 5000  // kirim sensor tiap 5 detik
+#define INTERVAL_POLL 2000    // polling relay tiap 2 detik
 
-CREATE TABLE IF NOT EXISTS tormonitor_ayam_controls (
-    id          TEXT PRIMARY KEY,             -- 'lampu' | 'kipas'
-    status      BOOLEAN NOT NULL DEFAULT FALSE,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+// ── DHT Retry ────────────────────────────────────────────────
+#define DHT_RETRY_MAX 3
+#define DHT_RETRY_DELAY 600
 
--- Komentar
-COMMENT ON TABLE  tormonitor_ayam_controls            IS 'Status kontrol perangkat kandang (lampu, kipas)';
-COMMENT ON COLUMN tormonitor_ayam_controls.id         IS 'Identifier perangkat: lampu atau kipas';
-COMMENT ON COLUMN tormonitor_ayam_controls.status     IS 'TRUE = ON/NYALA, FALSE = OFF/MATI';
-COMMENT ON COLUMN tormonitor_ayam_controls.updated_at IS 'Waktu terakhir status diperbarui';
+// ═══════════════════════════════════════════════════════════════
+// GLOBAL
+// ═══════════════════════════════════════════════════════════════
 
--- Trigger: otomatis update kolom updated_at saat row diupdate
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+DHT dht(DHT_PIN, DHT_TYPE);
+unsigned long tSensor = 0, tPoll = 0;
+bool relayState[RELAY_COUNT];
 
-CREATE TRIGGER trg_controls_updated_at
-    BEFORE UPDATE ON tormonitor_ayam_controls
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+// ═══════════════════════════════════════════════════════════════
+// SETUP
+// ═══════════════════════════════════════════════════════════════
 
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+  Serial.println("\n========================================");
+  Serial.println(" TORMONITOR AYAM — ESP32 Booting...");
+  Serial.println("========================================");
 
--- ============================================================
--- 3. DATA AWAL (SEED)
---    Insert row default untuk lampu dan kipas
--- ============================================================
+  // Init relay — semua OFF saat boot (active LOW → HIGH = OFF)
+  for (int i = 0; i < RELAY_COUNT; i++) {
+    pinMode(RELAY[i], OUTPUT);
+    digitalWrite(RELAY[i], HIGH);
+    relayState[i] = false;
+  }
+  Serial.println("[RELAY] Semua relay OFF (boot)");
 
-INSERT INTO tormonitor_ayam_controls (id, status)
-VALUES
-    ('lampu', FALSE),
-    ('kipas', FALSE)
-ON CONFLICT (id) DO NOTHING;
+  // Ultrasonik single-pin: default OUTPUT LOW
+  pinMode(ULTRA_PIN, OUTPUT);
+  digitalWrite(ULTRA_PIN, LOW);
 
--- Contoh data sensor awal (opsional, untuk testing)
-INSERT INTO tormonitor_ayam_logs (suhu, kelembapan, stok_pakan)
-VALUES (28.5, 65.0, 80.0);
+  // Init DHT
+  dht.begin();
+  Serial.println("[DHT] Sensor diinisialisasi (GPIO4, DHT22)");
 
+  // Koneksi WiFi
+  Serial.printf("[WIFI] Menghubungkan ke: %s\n", WIFI_SSID);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  int attempt = 0;
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    if (++attempt > 40) {
+      Serial.println("\n[WIFI] Gagal konek setelah 20 detik, restart...");
+      ESP.restart();
+    }
+  }
+  Serial.printf("\n[WIFI] Terhubung! IP: %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("[WIFI] Signal RSSI: %d dBm\n", WiFi.RSSI());
 
--- ============================================================
--- 4. ROW LEVEL SECURITY (RLS)
---    Aktifkan RLS dan buat policy untuk akses publik
---    (sesuaikan dengan kebutuhan keamanan Anda)
--- ============================================================
+  // Tunggu DHT22 stabilisasi
+  Serial.println("[DHT] Menunggu sensor stabilisasi (2 detik)...");
+  delay(2000);
 
--- Aktifkan RLS
-ALTER TABLE tormonitor_ayam_logs     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tormonitor_ayam_controls ENABLE ROW LEVEL SECURITY;
+  Serial.println("[BOOT] Selesai. Mulai loop...\n");
+}
 
--- Policy: izinkan SELECT untuk semua (anon key)
-CREATE POLICY "Allow public read logs"
-    ON tormonitor_ayam_logs FOR SELECT
-    USING (true);
+// ═══════════════════════════════════════════════════════════════
+// LOOP
+// ═══════════════════════════════════════════════════════════════
 
-CREATE POLICY "Allow public read controls"
-    ON tormonitor_ayam_controls FOR SELECT
-    USING (true);
+void loop() {
+  unsigned long now = millis();
 
--- Policy: izinkan INSERT log (dari ESP32/perangkat IoT)
-CREATE POLICY "Allow insert logs"
-    ON tormonitor_ayam_logs FOR INSERT
-    WITH CHECK (true);
+  if (now - tSensor >= INTERVAL_SENSOR) {
+    tSensor = now;
+    kirimSensor();
+  }
 
--- Policy: izinkan UPDATE controls (dari dashboard web)
-CREATE POLICY "Allow update controls"
-    ON tormonitor_ayam_controls FOR UPDATE
-    USING (true)
-    WITH CHECK (true);
+  if (now - tPoll >= INTERVAL_POLL) {
+    tPoll = now;
+    pollRelay();
+  }
+}
 
+// ═══════════════════════════════════════════════════════════════
+// BACA DHT DENGAN RETRY
+// ═══════════════════════════════════════════════════════════════
 
--- ============================================================
--- 5. AKTIFKAN REALTIME
---    Agar subscription Supabase Realtime berfungsi
--- ============================================================
+bool bacaDHT(float& suhu, float& kelembapan) {
+  for (int i = 1; i <= DHT_RETRY_MAX; i++) {
+    suhu = dht.readTemperature();
+    kelembapan = dht.readHumidity();
 
-ALTER PUBLICATION supabase_realtime
-    ADD TABLE tormonitor_ayam_logs, tormonitor_ayam_controls;
+    if (!isnan(suhu) && !isnan(kelembapan)) {
+      if (i > 1) Serial.printf("[DHT] Berhasil baca pada percobaan ke-%d\n", i);
+      return true;
+    }
 
+    Serial.printf("[DHT] Percobaan %d/%d gagal (NaN). Tunggu %dms...\n",
+                  i, DHT_RETRY_MAX, DHT_RETRY_DELAY);
+    delay(DHT_RETRY_DELAY);
+  }
+  return false;
+}
 
--- Tambah kolom baru di tabel controls
-ALTER TABLE tormonitor_ayam_controls
-  ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Perangkat',
-  ADD COLUMN IF NOT EXISTS icon  TEXT NOT NULL DEFAULT 'plug';
+// ═══════════════════════════════════════════════════════════════
+// KIRIM DATA SENSOR → POST /api/sensor
+// ═══════════════════════════════════════════════════════════════
 
--- Update data lama supaya punya label
-UPDATE tormonitor_ayam_controls SET label = 'Lampu Kandang', icon = 'light' WHERE id = 'lampu';
-UPDATE tormonitor_ayam_controls SET label = 'Kipas Ventilasi', icon = 'fan'   WHERE id = 'kipas';
+void kirimSensor() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[SENSOR] WiFi tidak terhubung, skip kirim.");
+    reconnectWifi();
+    return;
+  }
 
--- Policy: izinkan INSERT perangkat baru dari dashboard
-CREATE POLICY "Allow insert controls"
-  ON tormonitor_ayam_controls FOR INSERT
-  WITH CHECK (true);
+  // Baca DHT
+  float suhu = NAN, kelembapan = NAN;
+  if (!bacaDHT(suhu, kelembapan)) {
+    Serial.println("[DHT] GAGAL baca setelah semua percobaan! Cek: kabel GPIO4, pull-up 10k");
+    return;
+  }
+  Serial.printf("[DHT] Suhu=%.1f°C Kelembapan=%.1f%%\n", suhu, kelembapan);
 
--- Policy: izinkan DELETE perangkat dari dashboard
-CREATE POLICY "Allow delete controls"
-  ON tormonitor_ayam_controls FOR DELETE
-  USING (true);
+  // Baca ultrasonik
+  float jarak = bacaUltrasonik();
+  if (jarak < 0) {
+    Serial.println("[ULTRA] Sensor timeout, skip kirim.");
+    return;
+  }
+  Serial.printf("[ULTRA] Jarak=%.1f cm\n", jarak);
+
+  // Buat JSON
+  StaticJsonDocument<128> doc;
+  doc["suhu"] = roundf(suhu * 10) / 10.0f;
+  doc["kelembapan"] = roundf(kelembapan * 10) / 10.0f;
+  doc["stok_pakan"] = roundf(jarak * 10) / 10.0f;
+
+  String body;
+  serializeJson(doc, body);
+  Serial.printf("[SENSOR] Mengirim: %s\n", body.c_str());
+
+  // HTTP POST ke Vercel /api/sensor
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  String endpoint = String(API_BASE) + "/api/sensor";
+  http.begin(client, endpoint);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(10000);
+
+  int code = http.POST(body);
+
+  if (code == 200 || code == 201) {
+    String raw = http.getString();
+    Serial.printf("[SENSOR] Sukses! HTTP %d — %s\n", code, raw.c_str());
+
+    // Parse response untuk terapkan relay jika ada
+    StaticJsonDocument<256> res;
+    if (deserializeJson(res, raw) == DeserializationError::Ok) {
+      if (res.containsKey("pins")) {
+        terapkanRelay(res["pins"].as<JsonObject>());
+      }
+    }
+  } else if (code < 0) {
+    Serial.printf("[SENSOR] Gagal koneksi! Error: %s\n", http.errorToString(code).c_str());
+  } else {
+    Serial.printf("[SENSOR] HTTP Error %d — %s\n", code, http.getString().c_str());
+  }
+
+  http.end();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POLLING RELAY → GET /api/control
+// ═══════════════════════════════════════════════════════════════
+
+void pollRelay() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.begin(client, String(API_BASE) + "/api/control");
+  http.setTimeout(5000);
+  int code = http.GET();
+
+  if (code == 200) {
+    String raw = http.getString();
+    StaticJsonDocument<512> doc;
+    if (deserializeJson(doc, raw) == DeserializationError::Ok) {
+      // Response: { "lampu": true, "kipas": false, ... }
+      // Map relay berdasarkan indeks (V10=relay[0], V11=relay[1], ...)
+      // Kamu bisa kustomisasi mapping ini sesuai kebutuhan
+      const char* relayKeys[] = { "lampu", "kipas", "pompa", "pemanas",
+                                  "relay5", "relay6", "relay7", "relay8" };
+      for (int i = 0; i < RELAY_COUNT; i++) {
+        if (doc.containsKey(relayKeys[i])) {
+          bool nyala = doc[relayKeys[i]].as<bool>();
+          if (nyala != relayState[i]) {
+            relayState[i] = nyala;
+            digitalWrite(RELAY[i], nyala ? LOW : HIGH);  // active LOW
+            Serial.printf("[RELAY] %s → GPIO%d %s\n",
+                          relayKeys[i], RELAY[i], nyala ? "ON" : "OFF");
+          }
+        }
+      }
+    }
+  }
+
+  http.end();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TERAPKAN RELAY DARI RESPONSE JSON (opsional)
+// ═══════════════════════════════════════════════════════════════
+
+void terapkanRelay(JsonObject pins) {
+  if (pins.isNull()) return;
+  for (int i = 0; i < RELAY_COUNT; i++) {
+    String key = "V" + String(10 + i);
+    if (!pins.containsKey(key)) continue;
+    bool nyala = (pins[key].as<int>() == 1);
+    if (nyala != relayState[i]) {
+      relayState[i] = nyala;
+      digitalWrite(RELAY[i], nyala ? LOW : HIGH);
+      Serial.printf("[RELAY] %s → GPIO%d %s\n",
+                    key.c_str(), RELAY[i], nyala ? "ON" : "OFF");
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ULTRASONIK SINGLE-PIN (GPIO14)
+// ═══════════════════════════════════════════════════════════════
+
+float bacaUltrasonik() {
+  pinMode(ULTRA_PIN, OUTPUT);
+  digitalWrite(ULTRA_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(ULTRA_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(ULTRA_PIN, LOW);
+
+  pinMode(ULTRA_PIN, INPUT);
+  long dur = pulseIn(ULTRA_PIN, HIGH, 30000);
+
+  if (dur == 0) {
+    Serial.println("[ULTRA] Timeout — cek wiring GPIO14");
+    return -1.0f;
+  }
+
+  return (dur * 0.0343f) / 2.0f;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RECONNECT WIFI
+// ═══════════════════════════════════════════════════════════════
+
+void reconnectWifi() {
+  Serial.println("[WIFI] Putus, mencoba reconnect...");
+  WiFi.disconnect();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  int t = 0;
+  while (WiFi.status() != WL_CONNECTED && t++ < 20) delay(500);
+  if (WiFi.status() == WL_CONNECTED)
+    Serial.printf("[WIFI] Reconnected! IP: %s\n", WiFi.localIP().toString().c_str());
+  else
+    Serial.println("[WIFI] Gagal reconnect.");
+}
