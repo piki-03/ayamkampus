@@ -16,6 +16,7 @@
 
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
 
@@ -23,29 +24,29 @@
 // KONFIGURASI — WAJIB DIISI
 // ═══════════════════════════════════════════════════════════════
 
-const char* WIFI_SSID = "NAMA_WIFI_KAMU";
-const char* WIFI_PASS = "PASSWORD_WIFI_KAMU";
+const char* WIFI_SSID = "telurdadar";
+const char* WIFI_PASS = "telurdadar";
 
 // Ganti dengan URL Vercel kamu setelah deploy
 // Contoh: "https://tormonitor-ayam.vercel.app"
-const char* API_BASE  = "https://tormonitor-ayam.vercel.app";
+const char* API_BASE = "https://ayamkampus-9nnq.vercel.app";
 
 // ── Pin Hardware ──────────────────────────────────────────────
-#define DHT_PIN      4    // DHT22 data pin
-#define DHT_TYPE     DHT22
-#define ULTRA_PIN    14   // HC-SR04 single-pin
+#define DHT_PIN 4  // DHT22 data pin
+#define DHT_TYPE DHT22
+#define ULTRA_PIN 14  // HC-SR04 single-pin
 
 // ── Relay 8 channel (active LOW) ─────────────────────────────
-#define RELAY_COUNT  8
-const int RELAY[RELAY_COUNT] = { 17, 5, 18, 19, 21, 3, 1, 22 };
+#define RELAY_COUNT 8
+const int RELAY[RELAY_COUNT] = { 17, 5, 18, 19, 21, 23, 25, 22 };
 
 // ── Interval polling ─────────────────────────────────────────
-#define INTERVAL_SENSOR  5000   // kirim sensor tiap 5 detik
-#define INTERVAL_POLL    2000   // polling relay tiap 2 detik
+#define INTERVAL_SENSOR 5000  // kirim sensor tiap 5 detik
+#define INTERVAL_POLL 2000    // polling relay tiap 2 detik
 
 // ── DHT Retry ────────────────────────────────────────────────
-#define DHT_RETRY_MAX    3
-#define DHT_RETRY_DELAY  600
+#define DHT_RETRY_MAX 3
+#define DHT_RETRY_DELAY 600
 
 // ═══════════════════════════════════════════════════════════════
 // GLOBAL
@@ -128,7 +129,7 @@ void loop() {
 
 bool bacaDHT(float& suhu, float& kelembapan) {
   for (int i = 1; i <= DHT_RETRY_MAX; i++) {
-    suhu      = dht.readTemperature();
+    suhu = dht.readTemperature();
     kelembapan = dht.readHumidity();
 
     if (!isnan(suhu) && !isnan(kelembapan)) {
@@ -172,18 +173,20 @@ void kirimSensor() {
 
   // Buat JSON
   StaticJsonDocument<128> doc;
-  doc["suhu"]     = roundf(suhu * 10) / 10.0f;
+  doc["suhu"] = roundf(suhu * 10) / 10.0f;
   doc["kelembapan"] = roundf(kelembapan * 10) / 10.0f;
-  doc["jarak_cm"] = roundf(jarak * 10) / 10.0f;
+  doc["stok_pakan"] = roundf(jarak * 10) / 10.0f;
 
   String body;
   serializeJson(doc, body);
   Serial.printf("[SENSOR] Mengirim: %s\n", body.c_str());
 
   // HTTP POST ke Vercel /api/sensor
+  WiFiClientSecure client;
+  client.setInsecure();
   HTTPClient http;
   String endpoint = String(API_BASE) + "/api/sensor";
-  http.begin(endpoint);
+  http.begin(client, endpoint);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
 
@@ -216,8 +219,10 @@ void kirimSensor() {
 void pollRelay() {
   if (WiFi.status() != WL_CONNECTED) return;
 
+  WiFiClientSecure client;
+  client.setInsecure();
   HTTPClient http;
-  http.begin(String(API_BASE) + "/api/control");
+  http.begin(client, String(API_BASE) + "/api/control");
   http.setTimeout(5000);
   int code = http.GET();
 
@@ -229,13 +234,13 @@ void pollRelay() {
       // Map relay berdasarkan indeks (V10=relay[0], V11=relay[1], ...)
       // Kamu bisa kustomisasi mapping ini sesuai kebutuhan
       const char* relayKeys[] = { "lampu", "kipas", "pompa", "pemanas",
-                                   "relay5", "relay6", "relay7", "relay8" };
+                                  "relay5", "relay6", "relay7", "relay8" };
       for (int i = 0; i < RELAY_COUNT; i++) {
         if (doc.containsKey(relayKeys[i])) {
           bool nyala = doc[relayKeys[i]].as<bool>();
           if (nyala != relayState[i]) {
             relayState[i] = nyala;
-            digitalWrite(RELAY[i], nyala ? LOW : HIGH); // active LOW
+            digitalWrite(RELAY[i], nyala ? LOW : HIGH);  // active LOW
             Serial.printf("[RELAY] %s → GPIO%d %s\n",
                           relayKeys[i], RELAY[i], nyala ? "ON" : "OFF");
           }
