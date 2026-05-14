@@ -44,9 +44,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Field suhu, kelembapan, stok_pakan wajib diisi" });
   }
 
-// Konversi jarak → persen (wadah 5cm)
-const stok_pakan = stok_pakan  >= 5 ? 0 : Math.round((1 - stok_pakan  / 5) * 100 * 10) / 10;
-
   // ── Status suhu ──────────────────────────────────────────────
   let status_suhu;
   if (suhu < CONFIG.suhu.min_optimal) status_suhu = "rendah";
