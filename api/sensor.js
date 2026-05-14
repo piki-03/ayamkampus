@@ -39,7 +39,9 @@ export default async function handler(req, res) {
 
   // ── Ambil dari body ──────────────────────────────────────────
   const { suhu, kelembapan, stok_pakan } = req.body;
-
+const { jarak_kosong, jarak_penuh } = CONFIG.pakan;
+let stok_pakan = ((jarak_kosong - jarak_cm) / (jarak_kosong - jarak_penuh)) * 100;
+stok_pakan = Math.min(100, Math.max(0, Math.round(stok_pakan * 100) / 100));
   if (suhu === undefined || kelembapan === undefined || stok_pakan === undefined) {
     return res.status(400).json({ error: "Field suhu, kelembapan, stok_pakan wajib diisi" });
   }
