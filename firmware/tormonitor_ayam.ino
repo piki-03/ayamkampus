@@ -1,9 +1,13 @@
-
- // * Library yang dibutuhkan:
- // * - DHT sensor library (Adafruit)
- // * - Adafruit Unified Sensor
- // * - ArduinoJson (Benoit Blanchon) v6+
-
+/*
+ * TORMONITOR AYAM — ESP32 Firmware
+ * Backend: Vercel Serverless Functions
+ *
+ *
+ * Library yang dibutuhkan:
+ * - DHT sensor library (Adafruit)
+ * - Adafruit Unified Sensor
+ * - ArduinoJson (Benoit Blanchon) v6+
+ */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -222,7 +226,7 @@ void pollRelay() {
     Serial.printf("[POLL] Response: %s\n", raw.c_str()); // ← tambah ini
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, raw) == DeserializationError::Ok) {
-      const char* relayKeys[] = { "lampu", "kipas", "pompa", "pemanas",
+      const char* relayKeys[] = { "lampu1", "kipas1", "pakan1", "pemanas1",
                                   "relay5", "relay6", "relay7", "relay8" };
       for (int i = 0; i < RELAY_COUNT; i++) {
         if (doc.containsKey(relayKeys[i])) {
