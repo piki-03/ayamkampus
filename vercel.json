@@ -1,25 +1,9 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" }
-  ],
   "routes": [
-    {
-      "src": "/",
-      "dest": "/frontend/index.html"
-    },
-    {
-      "src": "/(.*\\.css)",
-      "dest": "/frontend/$1"
-    },
-    {
-      "src": "/(.*\\.js)",
-      "dest": "/frontend/$1"
-    }
-  ],
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  }
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/style.css", "dest": "/frontend/style.css" },
+    { "src": "/script.js", "dest": "/frontend/script.js" },
+    { "src": "/(.*)", "dest": "/frontend/index.html" }
+  ]
 }
