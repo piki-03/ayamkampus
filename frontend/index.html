@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tormonitor Ayam</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="header">
+    <div class="header__inner">
+      <div class="header__brand">
+        <div class="header__logo">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="6" fill="#1A56FF"/>
+            <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14C21 17.866 17.866 21 14 21" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="14" cy="14" r="3" fill="white"/>
+            <path d="M7 14C7 17.866 10.134 21 14 21" stroke="#60A5FA" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="header__title-group">
+          <h1 class="header__title">Tormonitor<span class="header__title--accent">Ayam</span></h1>
+          <p class="header__subtitle">IoT Poultry Monitoring System</p>
+        </div>
+      </div>
+
+      <div class="header__status">
+        <div class="status-badge" id="connection-badge">
+          <span class="status-badge__dot" id="status-dot"></span>
+          <span class="status-badge__label" id="status-label">Connecting...</span>
+        </div>
+        <div class="header__time" id="current-time">--:--:--</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== MAIN ===== -->
+  <main class="main">
+
+    <!-- Ticker bar -->
+    <div class="ticker-bar">
+      <span class="ticker-bar__label">LIVE</span>
+      <span class="ticker-bar__text" id="ticker-text">Memuat data sistem...</span>
+    </div>
+
+    <!-- ===== MONITORING SECTION ===== -->
+    <section class="section">
+      <div class="section__header">
+        <h2 class="section__title">Monitoring Real-Time</h2>
+        <span class="section__badge">Auto-refresh 2s</span>
+      </div>
+
+      <div class="monitoring-grid">
+
+        <!-- Suhu Card -->
+        <article class="monitor-card monitor-card--temp" id="card-suhu">
+          <div class="monitor-card__header">
+            <div class="monitor-card__icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+              </svg>
+            </div>
+            <span class="monitor-card__label">Suhu Kandang</span>
+          </div>
+          <div class="monitor-card__value-wrap">
+            <span class="monitor-card__value" id="temp-value">--</span>
+            <span class="monitor-card__unit">°C</span>
+          </div>
+          <div class="monitor-card__bar-wrap">
+            <div class="monitor-card__bar">
+              <div class="monitor-card__bar-fill" id="temp-bar" style="width: 0%"></div>
+            </div>
+            <span class="monitor-card__range">0°C — 50°C</span>
+          </div>
+          <div class="monitor-card__status-text" id="temp-status">Memuat...</div>
+        </article>
+
+        <!-- Kelembapan Card -->
+        <article class="monitor-card monitor-card--humid" id="card-humid">
+          <div class="monitor-card__header">
+            <div class="monitor-card__icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+              </svg>
+            </div>
+            <span class="monitor-card__label">Kelembapan</span>
+          </div>
+          <div class="monitor-card__value-wrap">
+            <span class="monitor-card__value" id="humid-value">--</span>
+            <span class="monitor-card__unit">%</span>
+          </div>
+          <div class="monitor-card__bar-wrap">
+            <div class="monitor-card__bar">
+              <div class="monitor-card__bar-fill" id="humid-bar" style="width: 0%"></div>
+            </div>
+            <span class="monitor-card__range">0% — 100%</span>
+          </div>
+          <div class="monitor-card__status-text" id="humid-status">Memuat...</div>
+        </article>
+
+        <!-- Stok Pakan Card -->
+        <article class="monitor-card monitor-card--feed" id="card-feed">
+          <div class="monitor-card__header">
+            <div class="monitor-card__icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
+            </div>
+            <span class="monitor-card__label">Stok Pakan</span>
+          </div>
+          <div class="monitor-card__value-wrap">
+            <span class="monitor-card__value" id="feed-value">--</span>
+            <span class="monitor-card__unit">%</span>
+          </div>
+          <!-- Radial gauge for pakan -->
+          <div class="feed-gauge">
+            <svg class="feed-gauge__svg" viewBox="0 0 120 120">
+              <circle class="feed-gauge__track" cx="60" cy="60" r="50" />
+              <circle class="feed-gauge__fill" id="feed-gauge-fill" cx="60" cy="60" r="50"
+                stroke-dasharray="314.16"
+                stroke-dashoffset="314.16"
+                transform="rotate(-90 60 60)" />
+            </svg>
+            <div class="feed-gauge__label" id="feed-label">Memuat...</div>
+          </div>
+          <div class="monitor-card__status-text" id="feed-status">Sensor Ultrasonik Aktif</div>
+        </article>
+
+      </div>
+    </section>
+
+  <!-- ===== KONTROL SECTION ===== -->
+<section class="section">
+  <div class="section__header">
+    <h2 class="section__title">Kontrol Perangkat</h2>
+    <div class="section__header-right">
+      <span class="section__badge" id="device-count">0 Perangkat</span>
+      <button class="btn-add-device" id="btn-add-device" title="Tambah Perangkat">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Tambah
+      </button>
+    </div>
+  </div>
+  <div class="control-grid" id="control-grid">
+    <!-- Card perangkat dirender dinamis oleh script.js -->
+  </div>
+</section>
+
+<!-- ===== MODAL TAMBAH PERANGKAT ===== -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal__header">
+      <h3 class="modal__title">Tambah Perangkat Baru</h3>
+      <button class="modal__close" id="modal-close">&times;</button>
+    </div>
+    <div class="modal__body">
+
+      <div class="form-group">
+        <label class="form-label">ID Perangkat <span class="form-hint">(unik, tanpa spasi)</span></label>
+        <input type="text" id="input-device-id" class="form-input" placeholder="contoh: pompa_air" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nama Perangkat</label>
+        <input type="text" id="input-device-label" class="form-input" placeholder="contoh: Pompa Air" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Ikon</label>
+        <div class="icon-picker" id="icon-picker">
+          <button class="icon-option selected" data-icon="plug">🔌 Umum</button>
+          <button class="icon-option" data-icon="light">💡 Lampu</button>
+          <button class="icon-option" data-icon="fan">🌀 Kipas</button>
+          <button class="icon-option" data-icon="pump">💧 Pompa</button>
+          <button class="icon-option" data-icon="heat">🔥 Pemanas</button>
+          <button class="icon-option" data-icon="feed">🌾 Pakan</button>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal__footer">
+      <button class="btn-cancel" id="btn-cancel-device">Batal</button>
+      <button class="btn-save" id="btn-save-device">Simpan Perangkat</button>
+    </div>
+  </div>
+</div>
+
+        <!-- Kontrol Lampu -->
+        <article class="control-card" id="card-lampu">
+          <div class="control-card__icon-wrap control-card__icon-wrap--light" id="icon-lampu">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+              <path d="M9 18h6M10 22h4"/>
+            </svg>
+          </div>
+          <div class="control-card__info">
+            <h3 class="control-card__name">Lampu Kandang</h3>
+            <p class="control-card__desc">Pencahayaan utama area ternak</p>
+            <span class="control-card__state" id="state-lampu">MATI</span>
+          </div>
+          <label class="toggle-switch" title="Toggle Lampu">
+            <input type="checkbox" id="btn-lampu" class="toggle-switch__input" />
+            <span class="toggle-switch__track">
+              <span class="toggle-switch__thumb"></span>
+            </span>
+          </label>
+        </article>
+
+        <!-- Kontrol Kipas -->
+        <article class="control-card" id="card-kipas">
+          <div class="control-card__icon-wrap control-card__icon-wrap--fan" id="icon-kipas">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="fan-icon" id="fan-icon-svg">
+              <path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+              <path d="M12 6V3M12 21v-3M6 12H3M21 12h-3"/>
+              <path d="M7.05 7.05 4.93 4.93M19.07 4.93l-2.12 2.12M7.05 16.95l-2.12 2.12M16.95 16.95l2.12 2.12"/>
+            </svg>
+          </div>
+          <div class="control-card__info">
+            <h3 class="control-card__name">Kipas Ventilasi</h3>
+            <p class="control-card__desc">Sirkulasi udara kandang</p>
+            <span class="control-card__state" id="state-kipas">MATI</span>
+          </div>
+          <label class="toggle-switch" title="Toggle Kipas">
+            <input type="checkbox" id="btn-kipas" class="toggle-switch__input" />
+            <span class="toggle-switch__track">
+              <span class="toggle-switch__thumb"></span>
+            </span>
+          </label>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ===== LOG SECTION ===== -->
+    <section class="section">
+      <div class="section__header">
+        <h2 class="section__title">Log Aktivitas</h2>
+        <button class="btn-clear" id="btn-clear-log">Bersihkan</button>
+      </div>
+      <div class="log-box" id="activity-log">
+        <p class="log-box__empty">Belum ada aktivitas...</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== FOOTER ====== -->
+  <footer class="footer">
+    <span>Tormonitor Ayam &copy; 2026</span>
+    <span id="uptime-display">Uptime: --:--:--</span>
+  </footer>
+
+  <!-- 1. Load Library Supabase CDN terlebih dahulu -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script src="script.js"></script>
+</body>
+</html>

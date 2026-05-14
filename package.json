@@ -1,0 +1,12 @@
+{
+  "name": "tormonitor-ayam",
+  "version": "1.0.0",
+  "description": "IoT Poultry Monitoring System — ESP32 + Supabase + Vercel",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
