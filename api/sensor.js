@@ -38,11 +38,14 @@ export default async function handler(req, res) {
   }
 
   // ── Ambil dari body ──────────────────────────────────────────
-  const { suhu, kelembapan, stok_pakan } = req.body;
+const { suhu, kelembapan, jarak_cm } = req.body;
 
-  if (suhu === undefined || kelembapan === undefined || stok_pakan === undefined) {
-    return res.status(400).json({ error: "Field suhu, kelembapan, stok_pakan wajib diisi" });
-  }
+if (suhu === undefined || kelembapan === undefined || jarak_cm === undefined) {
+  return res.status(400).json({ error: "Field suhu, kelembapan, jarak_cm wajib diisi" });
+}
+
+// Konversi jarak → persen (wadah 5cm)
+const stok_pakan = jarak_cm >= 5 ? 0 : Math.round((1 - jarak_cm / 5) * 100 * 10) / 10;
 
   // ── Status suhu ──────────────────────────────────────────────
   let status_suhu;
