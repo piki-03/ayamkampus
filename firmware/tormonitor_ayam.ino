@@ -1,18 +1,9 @@
-/*
- * TORMONITOR AYAM — ESP32 Firmware
- * Backend: Vercel Serverless Functions
- *
- * Virtual Pin mapping:
- * V1  = suhu (DHT22, GPIO4)
- * V2  = kelembapan (DHT22, GPIO4)
- * V3  = jarak_cm (Ultrasonik HC-SR04, GPIO14)
- * V10–V17 = relay GPIO 17,5,18,19,21,3,1,22
- *
- * Library yang dibutuhkan:
- * - DHT sensor library (Adafruit)
- * - Adafruit Unified Sensor
- * - ArduinoJson (Benoit Blanchon) v6+
- */
+
+ // * Library yang dibutuhkan:
+ // * - DHT sensor library (Adafruit)
+ // * - Adafruit Unified Sensor
+ // * - ArduinoJson (Benoit Blanchon) v6+
+
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -34,11 +25,11 @@ const char* API_BASE = "https://ayamkampus-9nnq.vercel.app";
 // ── Pin Hardware ──────────────────────────────────────────────
 #define DHT_PIN 4  // DHT22 data pin
 #define DHT_TYPE DHT22
-#define ULTRA_PIN 14  // HC-SR04 single-pin
+#define ULTRA_PIN 13  // HC-SR04 single-pin
 
 // ── Relay 8 channel (active LOW) ─────────────────────────────
 #define RELAY_COUNT 8
-const int RELAY[RELAY_COUNT] = { 17, 5, 18, 19, 21, 23, 25, 22 };
+const int RELAY[RELAY_COUNT] = { 17, 5, 18, 19, 14, 27, 26, 25 };
 
 // ── Interval polling ─────────────────────────────────────────
 #define INTERVAL_SENSOR 5000  // kirim sensor tiap 5 detik
@@ -228,11 +219,9 @@ void pollRelay() {
 
   if (code == 200) {
     String raw = http.getString();
+    Serial.printf("[POLL] Response: %s\n", raw.c_str()); // ← tambah ini
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, raw) == DeserializationError::Ok) {
-      // Response: { "lampu": true, "kipas": false, ... }
-      // Map relay berdasarkan indeks (V10=relay[0], V11=relay[1], ...)
-      // Kamu bisa kustomisasi mapping ini sesuai kebutuhan
       const char* relayKeys[] = { "lampu", "kipas", "pompa", "pemanas",
                                   "relay5", "relay6", "relay7", "relay8" };
       for (int i = 0; i < RELAY_COUNT; i++) {
@@ -240,13 +229,15 @@ void pollRelay() {
           bool nyala = doc[relayKeys[i]].as<bool>();
           if (nyala != relayState[i]) {
             relayState[i] = nyala;
-            digitalWrite(RELAY[i], nyala ? LOW : HIGH);  // active LOW
+            digitalWrite(RELAY[i], nyala ? LOW : HIGH);
             Serial.printf("[RELAY] %s → GPIO%d %s\n",
                           relayKeys[i], RELAY[i], nyala ? "ON" : "OFF");
           }
         }
       }
     }
+  } else {
+    Serial.printf("[POLL] Gagal! HTTP %d\n", code); // ← tambah ini
   }
 
   http.end();
