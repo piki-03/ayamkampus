@@ -226,8 +226,8 @@ void pollRelay() {
     Serial.printf("[POLL] Response: %s\n", raw.c_str()); // ← tambah ini
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, raw) == DeserializationError::Ok) {
-      const char* relayKeys[] = { "lampu1", "kipas1", "pakan1", "pemanas1",
-                                  "relay5", "relay6", "relay7", "relay8" };
+      const char* relayKeys[] = { "saklar1", "saklar2", "saklar3", "saklar4,saklar5,saklar6,saklar7,saklar8",
+                                  "relay5", "relay6", "relay7", "relay8", "relay1", "relay2", "relay3", "relay4" };
       for (int i = 0; i < RELAY_COUNT; i++) {
         if (doc.containsKey(relayKeys[i])) {
           bool nyala = doc[relayKeys[i]].as<bool>();
