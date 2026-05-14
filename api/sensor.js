@@ -10,7 +10,7 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const CONFIG = {
   suhu: { min_optimal: 24, max_optimal: 30 },
   kelembapan: { max_ideal: 75 },
-  pakan: { kritis: 15 },
+  pakan: { jarak_penuh: 2.0, jarak_kosong: 5.0, kritis: 20 },
 };
 
 async function supabaseFetch(path, method, body = null) {
